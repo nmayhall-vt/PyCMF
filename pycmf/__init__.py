@@ -3,9 +3,9 @@
 # Add imports here
 import numpy as np
 import pyscf 
-import pyscf.tools
 
 from .pycmf import *
+from .helpers import *
 from .cmf import *
 
 

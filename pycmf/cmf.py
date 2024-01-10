@@ -2,6 +2,8 @@ import numpy as np
 import pyscf
 from pyscf import gto, scf, fci
 
+from .helpers import * 
+
 class CMF:
     """
     Class to organize CMF calculation
@@ -11,11 +13,17 @@ class CMF:
         self.F = self.mf.get_fock()
         self.C = self.mf.mo_coeff
         self.S = self.mf.get_ovlp()
-    
-    def init(self, clusters:list, fspace:list):
+
+    def init(self, clusters:list[list[int]], fspace:list[tuple[int,int]]):
         #   Get data
         self.clusters = clusters 
         self.fspace   = fspace 
+        self.cluster_energies:list[float] = [0.0 for i in clusters]
+        self.cluster_1rdm:list[np.ndarray] = [np.zeros((len(i),len(i))) for i in clusters]
+        self.roots = [1 for i in clusters] 
+    
+    def rotate_mo_coeffs(self, U:np.ndarray) -> None:
+        self.C = self.C @ U
 
     def set_mo_coeffs(self, C:np.ndarray) -> None:
         self.C = C
@@ -35,7 +43,7 @@ class CMF:
         X = svec @ sal @ svec.T
         return X
 
-    def do_local_casci(self, i):
+    def do_local_casci(self, i) -> None:
         """
         Solve local problem for cluster i
         """
@@ -54,16 +62,30 @@ class CMF:
         h2 = pyscf.ao2mo.kernel(mol, Ci, aosym="s4", compact=False)
         h2.shape = (norb_i, norb_i, norb_i, norb_i)
 
-        nelec = sum(self.fspace[i])
         cisolver = fci.direct_spin1.FCI()
-        efci, ci = cisolver.kernel(h1, h2, norb_i, nelec, ecore=h0, nroots=1, verbose=100)
-        
+        efci, ci = cisolver.kernel(h1, h2, norb_i, self.fspace[i], ecore=h0, nroots=1, verbose=100)
+
+        self.cluster_energies[i] = efci
+
         fci_dim = ci.shape[0]*ci.shape[1]
-        d1 = cisolver.make_rdm1(ci, norb_i, nelec)
+        (d1a, d1b)  = cisolver.make_rdm1s(ci, norb_i, self.fspace[i])
+        
+        # d1 = cisolver.make_rdm1(ci, norb_i, nelec)
+        # (d1a, d1b), (d2aa, d2ab, d2bb)  = cisolver.make_rdm12s(ci, no, (na,nb))
+        
+        d1 = d1a + d1b
+
         print(" PYSCF 1RDM: ")
+        matrix_print(d1)
+        
         occs = np.linalg.eig(d1)[0]
+
+        print(" Occupation Numbers:")
         [print("%4i %12.8f"%(i,occs[i])) for i in range(len(occs))]
-        with np.printoptions(precision=6, suppress=True):
-            print(d1)
         print(" FCI:        %12.8f Dim:%6d"%(efci,fci_dim))
 
+    def energy(self):
+        pass
+    
+    def orbital_gradient(self):
+        pass

@@ -42,3 +42,5 @@ cmf = pycmf.CMF(mf)
 cmf.lowdin()
 cmf.init([[0, 1], [2, 3], [4, 5], [6, 7]], [(1,1), (1,1), (1,1), (1,1)])
 cmf.do_local_casci(1)
+
+print(cmf.cluster_energies)
