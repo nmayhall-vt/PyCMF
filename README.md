@@ -1,6 +1,7 @@
 PyCMF
 ==============================
 [//]: # (Badges)
+[![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://pycmf.readthedocs.io/en/latest/)
 [![GitHub Actions Build Status](https://github.com/nmayhall-vt/pycmf/workflows/CI/badge.svg)](https://github.com/nmayhall-vt/pycmf/actions?query=workflow%3ACI)
 [![codecov](https://codecov.io/gh/nmayhall-vt/PyCMF/branch/main/graph/badge.svg)](https://codecov.io/gh/nmayhall-vt/PyCMF/branch/main)
 

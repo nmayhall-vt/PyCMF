@@ -18,4 +18,4 @@ Cluster Mean-Field
 ===================
 
 Cluster Mean-Field theory is a way to model electronic structure with a direct product wavefunction. 
-:math:`\ket{\psi}=\ket{I_0}\ket{J_0}\dots\ket{N_0}`.
+:math:`\ket{\psi}=\ket{I_0}\otimes\ket{J_0}\otimes\dots\otimes\ket{N_0}`.

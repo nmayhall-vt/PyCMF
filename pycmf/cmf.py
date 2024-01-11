@@ -15,6 +15,21 @@ class CMF:
         self.S = self.mf.get_ovlp()
 
     def init(self, clusters:list[list[int]], fspace:list[tuple[int,int]]):
+        """Initialize a CMF calculation.
+    
+        
+        Parameters
+        ----------
+        clusters : list
+            A list of lists indicating which MOs are in each cluster.  
+        fspace : list 
+            A list of tuples indicating how many alpha and beta electrons are in each cluster 
+        
+        Returns
+        -------
+        None
+        """
+
         #   Get data
         self.clusters = clusters 
         self.fspace   = fspace 
@@ -85,7 +100,13 @@ class CMF:
         print(" FCI:        %12.8f Dim:%6d"%(efci,fci_dim))
 
     def energy(self):
+        """
+        Compute current CMF energy
+        """
         pass
     
     def orbital_gradient(self):
+        """
+        Compute current CMF orbital gradient 
+        """
         pass
