@@ -1,8 +1,8 @@
 PyCMF
 ==============================
 [//]: # (Badges)
-[![GitHub Actions Build Status](https://github.com/REPLACE_WITH_OWNER_ACCOUNT/pycmf/workflows/CI/badge.svg)](https://github.com/REPLACE_WITH_OWNER_ACCOUNT/pycmf/actions?query=workflow%3ACI)
-[![codecov](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/PyCMF/branch/main/graph/badge.svg)](https://codecov.io/gh/REPLACE_WITH_OWNER_ACCOUNT/PyCMF/branch/main)
+[![GitHub Actions Build Status](https://github.com/nmayhall-vt/pycmf/workflows/CI/badge.svg)](https://github.com/nmayhall-vt/pycmf/actions?query=workflow%3ACI)
+[![codecov](https://codecov.io/gh/nmayhall-vt/PyCMF/branch/main/graph/badge.svg)](https://codecov.io/gh/nmayhall-vt/PyCMF/branch/main)
 
 
 A CMF implementation using PySCF
