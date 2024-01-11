@@ -12,42 +12,15 @@ class CMF:
         self.mf = mf
         self.nbas = mf.mol.nbas
         
-        self.Cfrz = np.zeros((mf.mol.nbas,0))   # frozen core - no orbital optimization 
-        self.Cdoc = np.zeros((mf.mol.nbas,0))   # doubly occupied - no correlation
-        self.Cact = np.zeros((mf.mol.nbas,0))   # active 
-        self.Cvir = np.zeros((mf.mol.nbas,0))   # virtual - no correlation
-        self.S = self.mf.get_ovlp()
+        self.C = np.zeros((mf.mol.nbas,0))   # mo coeffs 
+        self.S = self.mf.get_ovlp()          
 
         # Active space clustering
         self.clusters = []
         self.fspace = []
 
-        # Active space integrals
-        self.active_h0 = 0.0
-        self.active_h1 = np.zeros((0,0))
-        self.active_h2 = np.zeros((0,0,0,0))
-
-    def set_Cfrz(self, C:np.ndarray):
-        """Define the frozen orbitals which are not optimized. 
-        """
-        self.Cfrz = C
-        if len(self.Cfrz.shape) == 1:
-            self.Cfrz.shape = (self.Cfrz.shape[0], 1)
     
-    def set_Cdoc(self, C:np.ndarray):
-        """Define the doubly occupied orbitals.
-        These represent a closed shell cluster.
-        """
-        self.Cdoc = C
-        if len(C.shape) == 1:
-            self.Cdoc.shape = (C.shape[0], 1)
-    
-    def set_Cvir(self, C:np.ndarray):
-        """Define the completely virtual orbitals.
-        """
-        self.Cvir = C
-
-    def set_Cact(self, C:np.ndarray, clusters:list[list[int]], fspace:list[tuple[int,int]]):
+    def init(self, C:np.ndarray, clusters:list[list[int]], fspace:list[tuple[int,int]]):
         """Define the active orbitals, with the associated clustering.
         
         Parameters
@@ -64,21 +37,18 @@ class CMF:
         """
 
         #   Get data
-        self.Cact = C
+        self.C = C
         self.clusters = clusters 
         self.fspace   = fspace 
         self.cluster_energies:list[float] = [0.0 for i in clusters]
         self.cluster_1rdm:list[np.ndarray] = [np.zeros((len(i),len(i))) for i in clusters]
         self.roots = [1 for i in clusters] 
-    
-    def rotate_mo_coeffs(self, U:np.ndarray) -> None:
-        self.Cdoc = self.Cdoc @ U
-        self.Cact = self.Cact @ U
-        self.Cvir = self.Cvir @ U
 
-    def get_mo_coeffs(self) -> np.ndarray:
-        return np.hstack((self.Cdoc, self.Cact, self.Cvir)) 
-    
+        self.cluster_core_energies:list[float] = [0.0 for i in clusters]
+
+    def rotate_mo_coeffs(self, U:np.ndarray) -> None:
+        self.C = self.C @ U
+
     def lowdin(self) -> np.ndarray:
         """
         Get symetrically orthogonalized localized basis
@@ -94,76 +64,68 @@ class CMF:
         X = svec @ sal @ svec.T
         return X
 
-    def build_active_integrals(self) -> None:
+    def update_veff_matrices(self) -> None:
+        """Compute the 'embedding' term for all clusters simultaneously.
         """
-        Build effective integrals for all active space clusters 
-        """
-        mol = self.mf.mol
+        full_dm = self.get_rdm1()
 
+        nelec = sum([sum(i) for i in self.fspace])
+        # Start with full dm, and remove each cluster's local dm
+        dms = [full_dm*1.0 for i in self.clusters]
+        for i,ci in enumerate(self.clusters):
+            Ci = self.C[:,ci]
+            dms[i] -= Ci @ self.cluster_1rdm[i] @ Ci.T
+
+            # nelec_i = sum(self.fspace[i])
+            # warn(abs(np.trace(dms[i]@self.S) - (nelec - nelec_i)) < 1e-16)
+        
+        self.v_effs = self.mf.get_veff(self.mf.mol, dms, hermi=1)
+
+
+        # energy_core += numpy.einsum('ij,ji', core_dm[0], hcore[0])
+        # energy_core += numpy.einsum('ij,ji', core_dm[1], hcore[1])
+        # energy_core += numpy.einsum('ij,ji', core_dm[0], corevhf[0]) * .5
+        # energy_core += numpy.einsum('ij,ji', core_dm[1], corevhf[1]) * .5
+
+
+    def get_rdm1(self):
+        N = self.mf.mol.nao
+        dm = np.zeros((N,N))
+        for i,ci in enumerate(self.clusters):
+            Ci = self.C[:,ci]
+            dm += Ci @ self.cluster_1rdm[i] @ Ci.T
+
+        # print(np.trace(dm @ self.S))
+        return dm
+
+    def build_cluster_integrals(self, i) -> (float, np.ndarray, np.ndarray):
+        """Build integrals for local cluster
+        """ 
+
+        Ni = len(self.clusters[i])
+
+        Ci = self.C[:,self.clusters[i]] 
         h0 = self.mf.energy_nuc()
-        h1  = self.mf.get_hcore()
+        h1 = self.mf.get_hcore() + self.v_effs[i]
+        h1 = Ci.T @ h1 @ Ci
 
-        nbas = self.nbas
-        nact = self.Cact.shape[1]
-
-
-        # Build AO 1rdm 
-        rdm1_embed = np.zeros((nbas, nbas))
-        rdm1_embed += self.Cfrz @ self.Cfrz.T
-        rdm1_embed += self.Cdoc @ self.Cdoc.T
-
-        j, k = self.mf.get_jk(self.mf.mol, rdm1_embed, hermi=1)
-
-        h0 += np.trace(rdm1_embed * ( h1 + .5*j - .25*k))
+        h2 = pyscf.ao2mo.kernel(self.mf.mol, Ci, aosym="s4", compact=False)
+        h2.shape = (Ni, Ni, Ni, Ni)
         
-        h1 += j - .5*k;
-
-        # now rotate to MO basis
-        h1 = self.Cact.T @ h1 @ self.Cact 
-        h2 = pyscf.ao2mo.kernel(mol, self.Cact, aosym="s4", compact=False)
-        h2.shape = (nact, nact, nact, nact)
-
-        self.active_h0 = h0
-        self.active_h1 = h1
-        self.active_h2 = h2
-        return
-
-    def extract_cluster_integrals(self, i) -> (float, np.ndarray, np.ndarray):
-        """
-        Build effective integrals for cluster `i`
-        """
-        mol = self.mf.mol
-        
-        ci = self.clusters[i]
-
-        h0  = self.active_h0
-        h1  = self.active_h1[ci, :][:, ci]
-        h2  = self.active_h2[ci,:,:,:][:,ci,:,:][:,:,ci,:][:, :, :, ci]
-
         return h0, h1, h2
 
-        # for j in range(len(self.clusters)):
-        #     if j == i:
-        #         continue
-        #     Cj = self.Cact[:, self.clusters[j]]
-        #     rdm1 += Cj @ (self.cluster_1rdm[j] @ Cj.T)
-
-        # Ci = self.Cact[:,self.clusters[i]]
-
-        # # now rotate to MO basis
-        # h1 = Ci.T @ h1 @ Ci
-        # h2 = pyscf.ao2mo.kernel(mol, Ci, aosym="s4", compact=False)
-        # h2.shape = (norb_i, norb_i, norb_i, norb_i)
-
-        # return h0, h1, h2
-
-
-    def do_local_casci(self, i) -> None:
+    def do_local_casci(self, i, verbose=1) -> None:
         """
         Solve local problem for cluster i
+
+        This will update both the cluster energy and the cluster_rdm1 data
         """
+
+        if verbose > 0:
+            print()
+            print(" Solve local FCI problem for cluster ", i) 
         
-        h0, h1, h2 = self.extract_cluster_integrals(i)
+        h0, h1, h2 = self.build_cluster_integrals(i)
 
         norb_i = h1.shape[1]
 
@@ -180,14 +142,19 @@ class CMF:
         
         d1 = d1a + d1b
 
-        print(" PYSCF 1RDM: ")
-        matrix_print(d1a)
-        
-        occs = np.linalg.eig(d1)[0]
+        self.cluster_1rdm[i] = d1
 
-        print(" Occupation Numbers:")
-        [print("%4i %12.8f"%(i,occs[i])) for i in range(len(occs))]
-        print(" FCI:        %12.8f Dim:%6d"%(efci,fci_dim))
+        if verbose > 3:
+            print(" PYSCF 1RDM: ")
+            matrix_print(d1a)
+        
+            occs = np.linalg.eig(d1)[0]
+
+            print(" Occupation Numbers:")
+            [print("%4i %12.8f"%(i,occs[i])) for i in range(len(occs))]
+        
+        if verbose > 0:
+            print(" FCI:        %12.8f Dim:%6d"%(efci,fci_dim))
 
     def energy(self):
         """
