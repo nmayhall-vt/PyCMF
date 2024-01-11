@@ -7,4 +7,3 @@ PyCMF
 .. autosummary::
    :toctree: autosummary
 
-   pycmf.canvas
